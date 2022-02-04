@@ -15,5 +15,10 @@
   "bugs": {
     "url": "https://github.com/andrea-arseni/emporio-create-report-pdf/issues"
   },
-  "homepage": "https://github.com/andrea-arseni/emporio-create-report-pdf#readme"
+  "homepage": "https://github.com/andrea-arseni/emporio-create-report-pdf#readme",
+  "dependencies": {
+    "axios": "^0.25.0",
+    "mysql2": "^2.3.3",
+    "pdfkit": "^0.13.0"
+  }
 }
