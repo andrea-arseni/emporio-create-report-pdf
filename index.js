@@ -41,8 +41,19 @@ exports.handler = async (event) => {
 
     // check formato corretto date immesse
     if(!reqBody.from || !reqBody.to) return errorHandler.throwError("Il corpo della richiesta deve contenere data inizio e data fine");
-    const {from, to, details} = reqBody;
+    const {from, to, details, overwrite} = reqBody;
     if(isNaN(Date.parse(from)) || isNaN(Date.parse(to))) return errorHandler.throwError("Le date inserite devono essere in formato 'yyyy-MM-dd'");
+
+    // definisci nome futuro file
+    const nomeFile = `report_da_${from}_a_${to}.pdf`;
+
+    // check che non esista già un report con quelle caratteristiche, nel caso ritorna errore
+    const checkDocAlreadyExists = `SELECT codice_bucket FROM file WHERE immobile ${idImmobile ? '= '+idImmobile : 'IS NULL'} AND nome = '${nomeFile}'`;
+    const resQuery = await connection.execute(checkDocAlreadyExists); 
+    const oldFileRecord = resQuery[0][0];
+    if(!overwrite && oldFileRecord) return errorHandler.throwError(`Il file richiesto è già stato creato. Crearne uno nuovo sovrascrivendo il vecchio?`);
+    
+    const codiceBucket = oldFileRecord ? oldFileRecord.codice_bucket : null;
 
     let immobile = null;
     let dataOffice = null;
@@ -50,7 +61,7 @@ exports.handler = async (event) => {
     // se c'è idImmobile retrieve l'intero immobile
     if(tipologia==='immobile'){
         immobile = await immobileUtil.buildImmobile(connection, idImmobile, from, to);
-        const fotoCopertina = immobile.files.find(el=>el.nome==='0'&&el.tipologia==='FOTO');
+        const fotoCopertina = immobile.files.find(el=>el.nome==='1'&&el.tipologia==='FOTO');
         if(fotoCopertina) immobile.foto = await readFileFromS3(process.env.BUCKET_FOTO_FIRMATE, fotoCopertina.codice_bucket);
     }else{
         dataOffice = await dataOfficeUtil.buildDataOffice(connection, from, to, details);
@@ -67,11 +78,9 @@ exports.handler = async (event) => {
     // elabora il documento
     const doc = pdfUtil.creaReport(payload);
 
-    // crea data oggi
-    //const oggi = `${new Date().getDate()}-${new Date().getMonth()+1}-${new Date().getFullYear()}`;
-
-    // crea nome nuovo file
-    const Key = immobile ? `immobili/${immobile.ref}/${new Date().getTime()}.pdf` : `documenti/${new Date().getTime()}.pdf`;
+    // crea nome nuovo file nel caso non sia già presente
+    const nuovoCodiceBucket = immobile ? `immobili/${immobile.ref}/${new Date().getTime()}.pdf` : `documenti/${new Date().getTime()}.pdf`;
+    const Key = codiceBucket ? codiceBucket : nuovoCodiceBucket;
 
     // salva documento
     params = {
@@ -81,13 +90,25 @@ exports.handler = async (event) => {
         ContentType: process.env.CONTENT_TYPE
     }
 
-    await s3.upload(params).promise();
+    try{
+        await s3.upload(params).promise();
+    }catch(e){
+        errorHandler.throwError("Errore nel salvataggio del file, procedura annullata");
+    }
+    
+    // interazione con il db
+    const createRecord = `INSERT INTO \`file\` (immobile, tipologia, nome, codice_bucket) VALUES (${immobile ? immobile.id : null}, 'DOCUMENTO', '${nomeFile}', '${Key}')`;
+
+    try{
+        await connection.execute(createRecord);
+    }catch(e){
+        throwError('Errore nell\'aggiornamento del database, procedura annullata');
+    }
 
     // TODO implement
     const response = {
         statusCode: 200,
-        body: JSON.stringify(dataOffice)
-        //body: "Report creato con successo",
+        body: "Report creato con successo",
     };
     return response;
 };

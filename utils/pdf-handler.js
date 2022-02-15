@@ -9,7 +9,12 @@ const PAGINA = {
   ANNUNCIO_IMMOBILE: 'ANNUNCIO_IMMOBILE', 
   VISITE_IMMOBILE: 'VISITE_IMMOBILE', 
   DOCS_IMMOBILE: 'DOCS_IMMOBILE', 
-  LOGS_IMMOBILE: 'LOGS_IMMOBILE'
+  LOGS_IMMOBILE: 'LOGS_IMMOBILE',
+  ACQUISIZIONI_CHIUSURE: 'ACQUISIZIONI_CHIUSURE',
+  IMMOBILI_ATTIVI: 'IMMOBILI_ATTIVI',
+  VISITE_TOTALI: 'VISITE_TOTALI',
+  LAVORI: 'LAVORI',
+  OPERAZIONI: 'OPERAZIONI'
 }
 
 const COLORS = {
@@ -19,6 +24,16 @@ const COLORS = {
   NORMAL: '#232323',
   WHITE: '#ffffff'
 } 
+
+const voltaPagina = (doc, pagine)=>{
+
+  displayFooter(doc);
+  displayNumeroPagina(doc, pagine.corrente, pagine.totali);
+  pagine.corrente = pagine.corrente+1;
+  creaPagina(doc);
+  doc.fontSize(13)
+  return pagine;
+}
 
 const getDate = (giornoEmissione) => 
 `${new Date(giornoEmissione).getDate()} ${MESI[new Date(giornoEmissione).getMonth()]} ${new Date(giornoEmissione).getFullYear()}`;
@@ -112,12 +127,8 @@ const displayFooter = (doc, firstPage = false)=>{
       .text(webAddress, {link: webAddress});
     }else{
       conf = {width: doc.page.width,align: 'center'};
-      doc.text("Emporio Case sas", 0, doc.page.height - 82, conf) 
+      doc.text("Emporio Case sas", 0, doc.page.height - 62, conf) 
       .text(sede, conf)
-      .fillColor(COLORS.BLUE)
-      .text(email, {link: "mailto:"+email, ...conf})
-      .fillColor(COLORS.BLUE)
-      .text(webAddress, {link: webAddress, ...conf});
     }
 }
 
@@ -162,12 +173,12 @@ const creaPrimaPagina = (doc, payload)=>{
 
     const textObject = tipologia==='immobile' ? 
     ['Analisi Annuncio e Valutazione Prezzo', 'Analisi Visite Effettuate', 'Analisi Foto e Documenti']:
-    ['Analisi Acquisizioni e Chiusure', 'Analisi Immobili Attivi', 'Analisi Lavori Attivi'];
+    ['Analisi Acquisizioni e Chiusure', 'Analisi Immobili Attivi', 'Elenco Visite Effettuate', 'Analisi Lavori Attivi'];
 
     if(details){
         tipologia==='immobile' ?
             textObject.push('Analisi Modifiche Effettuate') :
-            textObject.push('Analisi Operazioni');
+            textObject.push('Analisi Ricavi e Spese');
     }
   
     // intestazione Header
@@ -190,40 +201,64 @@ const creaPrimaPagina = (doc, payload)=>{
 
   }
 
+const rilevaPrezzoDiZona = (immobile, doc)=>{
+  if(immobile.datiZona){
+    doc.font('Helvetica-Oblique')
+    .text(`Disponibile prezzo medio di ${immobile.contratto} in zona a ${immobile.datiZona.periodoRiferimento}: `)
+    .moveDown(1);
+    let prezzoZona = immobile.datiZona.prezzoMetroQuadro+" ("+immobile.datiZona.range+")";
+    prezzoZona = prezzoZona.replace(/€/g, "€ ");
+    prezzoZona = prezzoZona.replace(/m/g, " m");
+    doc
+    .fillColor(COLORS.BLUE)
+    .text(prezzoZona)
+  }else{
+    doc.font('Helvetica-Oblique').fillColor(COLORS.RED)
+    .text('Analisi prezzo medio di '+immobile.contratto+' in zona non disponibile').fillColor(COLORS.NORMAL);
+  }
+  doc.fillColor(COLORS.NORMAL).moveDown(1);
+}
+
 const creaPaginaAnnuncioImmobile = (doc, payload)=>{
 
     // estrai dati
-    const {immobile, logo} = payload;
+    const {immobile} = payload;
 
-    // porzione per creazione e pubblicazione annuncio
-    const logPubblicato = immobile.logs.find(el=>el.azione==='ATTIVO');
-    const pubblicatoText = logPubblicato ? getDate(logPubblicato.data): "Mai pubblicato";
-    const pubblicatoColor = logPubblicato ? COLORS.NORMAL : COLORS.RED;
+    const logStato = immobile.logs.reverse().find(el=>el.azione===immobile.status);
+    const dataPubblicazione = logStato ? ` dal ${getDate(logStato.data)}` : " - mai stato attivato";
 
     // parte dichiarazione prezzo
     const prezzoMetroQuadro = formatNumber((immobile.prezzo/immobile.superficie).toFixed(0))+" € / m² ";
     const prezzoText = formatNumber(immobile.prezzo)+" € ";
     const superficieText = formatNumber(immobile.superficie)+" m² ";
 
-    // parte classe energetica
-    const classeEnergeticaText = immobile.classe_energetica && immobile.consumo ?
-    immobile.classe_energetica+": "+immobile.consumo+" m² / kWh" : "NON RILEVATA";
-
     creaHeader(doc, payload, ['Analisi Annuncio e', 'Valutazione Prezzo']);
 
     doc
     .fontSize(12)
     .fillColor(COLORS.NORMAL)
-    .text('Titolo: ', 60, 180, {continued: true})
-    .font('Helvetica-Oblique')
-    .text(immobile.titolo)
-    .moveDown(1)
     .font('Helvetica-BoldOblique')
     .text('Rif: ', {continued: true})
     .font('Helvetica-Oblique')
     .text(immobile.ref, {continued: true})
     .font('Helvetica-BoldOblique')
-    .text('    Contratto: ', {continued: true})
+    .text('    Titolo: ', {continued: true})
+    .font('Helvetica-Oblique')
+    .text(immobile.titolo)
+    .moveDown(1)
+    
+    .font('Helvetica-BoldOblique')
+    .text('Comune: ', {continued: true})
+    .font('Helvetica-Oblique')
+    .text(capitalize(immobile.comune), {continued: true})
+    .font('Helvetica-BoldOblique')
+    .text('    Indirizzo: ', {continued: true})
+    .font('Helvetica-Oblique')
+    .text(capitalize(immobile.indirizzo))
+    .moveDown(1)
+
+    .font('Helvetica-BoldOblique')
+    .text('Contratto: ', {continued: true})
     .font('Helvetica-Oblique')
     .text(capitalize(immobile.contratto), {continued: true})
     .font('Helvetica-BoldOblique')
@@ -235,29 +270,16 @@ const creaPaginaAnnuncioImmobile = (doc, payload)=>{
     .font('Helvetica-Oblique')
     .text(capitalize(immobile.stato))
     .moveDown(1)
+
     .font('Helvetica-BoldOblique')
-    .text('Comune: ', {continued: true})
-    .font('Helvetica-Oblique')
-    .text(capitalize(immobile.comune), {continued: true})
-    .font('Helvetica-BoldOblique')
-    .text('    Indirizzo: ', {continued: true})
-    .font('Helvetica-Oblique')
-    .text(capitalize(immobile.indirizzo))
-    .moveDown(1)
-    .font('Helvetica-BoldOblique')
-    .text('Creato: ', {continued: true})
-    .font('Helvetica-Oblique')
-    .text(getDate(immobile.logs[0].data), {continued: true})
-    .font('Helvetica-BoldOblique')
-    .text('    Pubblicato: ', {continued: true})
-    .font('Helvetica-Oblique')
-    .fillColor(pubblicatoColor)
-    .text(pubblicatoText, {continued:true})
-    .font('Helvetica-BoldOblique')
-    .text('    Attualmente: ', {continued: true})
+    .text('Status: ', {continued: true})
     .fillColor(immobile.status==='ATTIVO' ? COLORS.GREEN : COLORS.RED)
-    .text(' '+immobile.status)
+    .text(' '+immobile.status, {continued: true})
+    .fillColor(COLORS.NORMAL)
+    .font('Helvetica-Oblique')
+    .text(dataPubblicazione)
     .moveDown(1)
+
     .fillColor(COLORS.NORMAL)
     .font('Helvetica-BoldOblique')
     .text('Prezzo: ', {continued: true})
@@ -273,25 +295,9 @@ const creaPaginaAnnuncioImmobile = (doc, payload)=>{
     .text(prezzoMetroQuadro)
     .moveDown(1);
 
-    if(immobile.datiZona){
-      const prezzoZonaText = "Prezzo medio di zona a "+immobile.datiZona.periodoRiferimento+": ";
-      let prezzoZona = immobile.datiZona.prezzoMetroQuadro+" ("+immobile.datiZona.range+")";
-      prezzoZona = prezzoZona.replace(/€/g, "€ ");
-      prezzoZona = prezzoZona.replace(/m/g, " m");
-      doc.text(prezzoZonaText, {continued: true})
-      .text(prezzoZona)
-      .moveDown(1);
-    }
+    rilevaPrezzoDiZona(immobile, doc);
 
-    doc
-    .font('Helvetica-BoldOblique')
-    .text('Classe Energetica: ', {continued: true})
-    .font('Helvetica-Oblique')
-    .fillColor(classeEnergeticaText==='NON RILEVATA' ? COLORS.RED : classeEnergeticaText.startsWith('A') ? COLORS.GREEN : COLORS.NORMAL)
-    .text(capitalize(classeEnergeticaText))
-    .fillColor(COLORS.NORMAL)
-    .moveDown(1)
-    .font('Helvetica-BoldOblique')
+    doc.font('Helvetica-BoldOblique')
     .text('Descrizione annuncio:')
     .font('Helvetica-Oblique')
     .fontSize(11)
@@ -310,49 +316,15 @@ const creaPaginaAnnuncioImmobile = (doc, payload)=>{
 
 const creaPaginaVisiteImmobile = (doc, payload)=>{
 
-  // estrai dati
+  const pagine = getPagine(payload, PAGINA.VISITE_IMMOBILE);
+  
   const {immobile, from, to} = payload;
 
-  const pagine = getPagine(payload, PAGINA.VISITE_IMMOBILE);
+  const {visite} = immobile;
 
   creaHeader(doc, payload, ['Analisi Visite', 'Effettuate']);
 
-  const titolo = `Dal ${getDate(from)} al ${getDate(to)} ${immobile.visite.length===0 ? 'non':''} sono state effettuate ${immobile.visite.length===0 ? '' : immobile.visite.length+" "}visite`;
-
-  doc
-  .fontSize(13)
-  .fillColor(immobile.visite.length===0 ? COLORS.RED : COLORS.NORMAL)
-  .font('Helvetica-Oblique')
-  .text(titolo)
-  .fillColor(COLORS.NORMAL)
-  .moveDown(1);
-
-  // ordina visite
-  immobile.visite.sort((firstEl, secondEl)=> new Date(firstEl.quando).getTime() - new Date(secondEl.quando).getTime());
-
-  // per ogni visita scrivila, se le visite sono più di 8 cambia pagina ogni 10
-  immobile.visite.forEach((visita, index)=>{
-    if(index===8 || (index-8)%10===0){
-      displayFooter(doc);
-      displayNumeroPagina(doc, pagine.corrente, pagine.totali);
-      pagine.corrente = pagine.corrente+1;
-      creaPagina(doc);
-    }
-    const visitaText = visita.note ? `${visita.nome} (${visita.note})` : visita.nome;
-    doc
-    .fontSize(13)
-    .font('Helvetica-BoldOblique')
-    .text(`${++index}) ${getDate(visita.quando)}`, {continued: true})
-    .font('Helvetica-Oblique')
-    .text(' - '+capitalize(visitaText))
-    .moveDown(1)
-  })
-
-  // footer link al sito
-  displayFooter(doc);
-
-  // numero pagina
-  displayNumeroPagina(doc, pagine.corrente, pagine.totali);
+  displayVisite(visite, doc, pagine, from, to);
 }
 
 const reportDocumentoPresent = (files, nome, doc, continued) => { 
@@ -433,7 +405,7 @@ const creaPaginaDocumentiEFoto = (doc, payload)=>{
   reportDocumentoPresent(immobile.files, 'certificazione energetica', doc, true); 
   doc.font('Helvetica-BoldOblique')
   .text("    Identificativo proprietario: ", {continued: true})
-  reportDocumentoPresent(immobile.files, 'identificativo proprietario', doc, false); 
+  reportDocumentoPresent(immobile.files, 'identificativo', doc, false); 
   doc.font('Helvetica-BoldOblique')
   .text("Contratto collaborazione: ", {continued: true})
   reportDocumentoPresent(immobile.files, 'contratto collaborazione', doc, false);  
@@ -492,30 +464,77 @@ const creaPaginaModificheImmobile = (doc, payload) => {
   displayNumeroPagina(doc, pagine.corrente, pagine.totali);
 
 }
-
+  
 getPagine = (payload, pagina) => {
   const {details} = payload;
   let numeroPagineTotali = 0;
   
   if(payload.tipologia==='immobile'){
+
     const {visite, logs} = payload.immobile;
-    // 1 intestazione 2 annuncio 3 docs 4 visite 5logs
-    numeroPagineTotali = details ? 5 : 4;
-    // controlla se ci sono pagine in più
+
+    // 1 intestazione 2 annuncio 3 docs 4 visite 
+    numeroPagineTotali = 4;
+
+    // in base al numero visite le pagine possono crescere
     const numeroVisiteEccedenti = visite.length - 8;
-    const numeroLogsEccedenti = logs.length - 14;
-    if(numeroVisiteEccedenti>0) numeroPagineTotali = Math.ceil(numeroPagineTotali + numeroVisiteEccedenti / 10);
-    if(numeroLogsEccedenti>0) numeroPagineTotali = Math.ceil(numeroPagineTotali + numeroLogsEccedenti / 16);
+    if(numeroVisiteEccedenti>0) numeroPagineTotali = Math.ceil(numeroPagineTotali + numeroVisiteEccedenti / 12);
+
+    // se consideriamo i dettagli c'è un numero da calcolare di pagine in più 
+    if(details){
+      numeroPagineTotali++;
+      const numeroLogsEccedenti = logs.length - 14;
+      if(numeroLogsEccedenti>0) numeroPagineTotali = Math.ceil(numeroPagineTotali + numeroLogsEccedenti / 16);
+    }
+
     // retrieve current page
     switch(pagina){
       case PAGINA.INTESTAZIONE: return  {totali: numeroPagineTotali, corrente: 1};
       case PAGINA.ANNUNCIO_IMMOBILE: return {totali: numeroPagineTotali, corrente: 2};
       case PAGINA.VISITE_IMMOBILE: return {totali: numeroPagineTotali, corrente: 3};
-      case PAGINA.DOCS_IMMOBILE: return {totali: numeroPagineTotali, corrente: Math.ceil(4+numeroVisiteEccedenti/10)};
-      case PAGINA.LOGS_IMMOBILE: return {totali: numeroPagineTotali, corrente: Math.ceil(5+numeroVisiteEccedenti/10)};
+      case PAGINA.DOCS_IMMOBILE: return {totali: numeroPagineTotali, corrente: Math.ceil(4+numeroVisiteEccedenti/12)};
+      case PAGINA.LOGS_IMMOBILE: return {totali: numeroPagineTotali, corrente: Math.ceil(5+numeroVisiteEccedenti/12)};
     }
   }else{
-    return {totali: 1, corrente: 1}
+
+    const {acquisizioni, conclusi, attivi, visite, lavori, operazioni} = payload.dataOffice;
+
+    // 1 intestazione 2 acquisizioni/chiusure 3 attivi 4 visite 5 lavori
+    numeroPagineTotali = 5;
+
+    // aggiunta pagine per immobili cambiati eccedenti
+    const numeroImmobiliCambiatiEccedenti = acquisizioni.length + conclusi.length - 16;
+    if(numeroImmobiliCambiatiEccedenti > 0) numeroPagineTotali = Math.ceil(numeroPagineTotali + numeroImmobiliCambiatiEccedenti / 16);
+
+    // aggiunta pagine per immobili attivi eccedenti
+    const numeroImmobiliAttiviEccedenti = attivi.length - 2;
+    if(numeroImmobiliAttiviEccedenti>0) numeroPagineTotali = Math.ceil(numeroPagineTotali + numeroImmobiliAttiviEccedenti / 3);
+
+    // aggiunta pagine per visite effettuate
+    const numeroVisiteEccedenti = visite.length - 8;
+    if(numeroVisiteEccedenti>0) numeroPagineTotali = Math.ceil(numeroPagineTotali + numeroVisiteEccedenti / 12);
+
+    // aggiunta pagine per lavori effettuati
+    let numeroStepsLavori = 0;
+    lavori.forEach(lavoro=> numeroStepsLavori = numeroStepsLavori + 1 + lavoro.steps.length);
+    const numeroLavoriEccedenti = numeroStepsLavori - 10;
+    if(numeroLavoriEccedenti>0) numeroPagineTotali = Math.ceil(numeroPagineTotali + numeroLavoriEccedenti / 12);
+    
+    // se consideriamo i dettagli c'è un numero da calcolare di pagine in più 
+    if(details){
+      numeroPagineTotali++;
+      const numeroOperazioniEccedenti = operazioni.length - 12;
+      if(numeroOperazioniEccedenti>0) numeroPagineTotali = Math.ceil(numeroPagineTotali + numeroOperazioniEccedenti / 16);
+    }
+
+    switch(pagina){
+      case PAGINA.INTESTAZIONE: return  {totali: numeroPagineTotali, corrente: 1};
+      case PAGINA.ACQUISIZIONI_CHIUSURE: return {totali: numeroPagineTotali, corrente: 2};
+      case PAGINA.IMMOBILI_ATTIVI: return {totali: numeroPagineTotali, corrente: 3+Math.ceil(numeroImmobiliCambiatiEccedenti/16)};
+      case PAGINA.VISITE_TOTALI: return {totali: numeroPagineTotali, corrente: 4+Math.ceil(numeroImmobiliCambiatiEccedenti/16)+Math.ceil(numeroImmobiliAttiviEccedenti/3)};
+      case PAGINA.LAVORI: return {totali: numeroPagineTotali, corrente: 5+Math.ceil(numeroImmobiliCambiatiEccedenti/16)+Math.ceil(numeroImmobiliAttiviEccedenti/3)+Math.ceil(numeroVisiteEccedenti/12)};
+      case PAGINA.OPERAZIONI: return {totali: numeroPagineTotali, corrente: 6+Math.ceil(numeroImmobiliCambiatiEccedenti/16)+Math.ceil(numeroImmobiliAttiviEccedenti/3)+Math.ceil(numeroVisiteEccedenti/12)+Math.ceil(numeroLavoriEccedenti/12)};
+    }
   }
 }
 
@@ -545,13 +564,8 @@ displayListaAttivi = (lista, doc, pagine)=>{
 
   lista.forEach((immobile, index)=>{
 
-    if(index===2 || (index-2)%3===0){
-      displayFooter(doc);
-      displayNumeroPagina(doc, pagine.corrente, pagine.totali);
-      pagine.corrente = pagine.corrente+1;
-      creaPagina(doc);
-    }
-
+    if(index===2 || (index-2)%3===0) pagine = voltaPagina(doc, pagine);
+  
     const prezzoMetroQuadro = formatNumber((immobile.prezzo/immobile.superficie).toFixed(0))+" € / m² ";
     const prezzoText = formatNumber(immobile.prezzo)+" € ";
     const superficieText = formatNumber(immobile.superficie)+" m² ";
@@ -604,21 +618,9 @@ displayListaAttivi = (lista, doc, pagine)=>{
     .text(prezzoMetroQuadro)
     .moveDown(1);
 
-    if(immobile.datiZona){
-      doc.font('Helvetica-BoldOblique')
-      .text('Disponibile prezzo medio di zona rilevato a '+immobile.datiZona.periodoRiferimento)
-      let prezzoZona = immobile.datiZona.prezzoMetroQuadro+" ("+immobile.datiZona.range+")";
-      prezzoZona = prezzoZona.replace(/€/g, "€ ");
-      prezzoZona = prezzoZona.replace(/m/g, " m");
-      doc
-      .fillColor(COLORS.BLUE)
-      .font('Helvetica-Oblique')
-      .moveDown(1)
-      .text(prezzoZona)
-      .moveDown(1);
-    }
+    rilevaPrezzoDiZona(immobile, doc);
 
-    doc.moveDown(1);
+    doc.moveDown(3);
 
   })
 
@@ -630,7 +632,7 @@ const creaPaginaImmobiliCambiati = (doc, payload)=>{
 
   const {acquisizioni, conclusi} = dataOffice;
 
-  const pagine = getPagine(payload, null);
+  const pagine = getPagine(payload, PAGINA.ACQUISIZIONI_CHIUSURE);
 
   creaHeader(doc, payload, ["Immobili Acquisiti", "e Conclusi"]);
 
@@ -656,33 +658,158 @@ const creaPaginaImmobiliCambiati = (doc, payload)=>{
 
 const creaPagineImmobiliAttivi = (doc, payload)=>{
 
-  const {from, to, dataOffice} = payload;
+  const {dataOffice} = payload;
 
   const {attivi} = dataOffice;
 
-  const pagine = getPagine(payload, null);
+  const pagine = getPagine(payload, PAGINA.IMMOBILI_ATTIVI);
 
   creaHeader(doc, payload, ["Lista Immobili Attivi", "con Analisi Prezzo e Visite"]);
 
   doc.font('Helvetica-BoldOblique').fontSize(13)
-  .text(`Periodo di riferimento: ${getDate(from)} - ${getDate(to)}`)
-  .moveDown(1)
-  .text(`Immobili attivi: ${attivi.length}`)
-  .moveDown(1);
+  .text(`Numero immobili attivi al ${getDate(new Date())}:    ${attivi.length}`)
+  .moveDown(3);
 
   displayListaAttivi(attivi, doc, pagine);
+
+  // footer link al sito
+  displayFooter(doc);
+
+  // numero pagina
+  displayNumeroPagina(doc, pagine.corrente, pagine.totali);
+}
+
+const displayVisite = (visite, doc, pagine, from, to) => {
+
+  doc.font('Helvetica-BoldOblique').fontSize(13)
+  .text(`Periodo di riferimento: ${getDate(from)} - ${getDate(to)}`)
+  .moveDown(1)
+  .text(`Visite effettuate: ${visite.length}`)
+  .moveDown(3);
+
+  visite.sort((firstEl, secondEl)=> new Date(firstEl.quando).getTime() - new Date(secondEl.quando).getTime());
+
+  // per ogni visita scrivila, se le visite sono più di 8 cambia pagina ogni 10
+  visite.forEach((visita, index)=>{
+    if(index===8 || (index-8)%12===0){
+      displayFooter(doc);
+      displayNumeroPagina(doc, pagine.corrente, pagine.totali);
+      pagine.corrente = pagine.corrente+1;
+      creaPagina(doc);
+    }
+    const visitaText = visita.note ? `${visita.nome} (${visita.note})` : visita.nome;
+
+    doc
+    .fontSize(13)
+    .font('Helvetica-BoldOblique')
+    .text(`${++index}) ${getDate(visita.quando)} ${visita.ref ? ' per ref. '+visita.ref :''}`, {continued: true})
+    .font('Helvetica-Oblique')
+    .text(' - '+capitalize(visitaText))
+    .moveDown(1)
+  })
+
+  // footer link al sito
+  displayFooter(doc);
+
+  // numero pagina
+  displayNumeroPagina(doc, pagine.corrente, pagine.totali);
+
+}
+
+const creaPaginaVisiteGenerica = (doc, payload)=>{  
+
+  const pagine = getPagine(payload, PAGINA.VISITE_TOTALI);
+  
+  const {dataOffice, from, to} = payload;
+
+  const {visite} = dataOffice;
+
+  creaHeader(doc, payload, ['Analisi Visite', 'Effettuate']);
+
+  displayVisite(visite, doc, pagine, from, to);
+
 }
 
 const creaPaginaLavori = (doc, payload)=>{
 
+  const {dataOffice, from, to} = payload;
+
+  const {lavori} = dataOffice;
+
+  let pagine = getPagine(payload, PAGINA.LAVORI);
+
   creaHeader(doc, payload, ["Analisi Lavori e", "Relativi Passaggi"]);
+
+  doc.font('Helvetica-BoldOblique').fontSize(13)
+  .text(`Periodo di riferimento: ${getDate(from)} - ${getDate(to)}`)
+  .moveDown(1)
+  .text(`Lavori in corso d'opera: ${lavori.length}`)
+  .moveDown(3);
+
+  let counter = 0;   
+  lavori.forEach((el, index)=>{
+    if(counter-10===0||(counter-10)%12===0) pagine = voltaPagina(doc, pagine);
+    doc.font('Helvetica-BoldOblique')
+    .text(`${index+1} - ${el.titolo}`)
+    .moveDown(1);
+    counter++;
+    el.steps.forEach(step=>{
+      if(counter-10===0||(counter-10)%12===0) pagine = voltaPagina(doc, pagine);
+      doc.font('Helvetica-Oblique')
+      .text(`   ${getDate(step.data)} - ${step.descrizione}`)
+      .moveDown(1);
+      counter++;
+    })
+  })
+
+  // footer link al sito
+  displayFooter(doc);
+
+  // numero pagina
+  displayNumeroPagina(doc, pagine.corrente, pagine.totali);
   
 }
 
 const creaPaginaOperazioni = (doc, payload)=>{
 
-  creaHeader(doc, payload, ["Analisi Operazioni", "Effettuate"]);
+  const {dataOffice, from, to} = payload;
 
+  const {operazioni} = dataOffice;
+
+  let pagine = getPagine(payload, PAGINA.OPERAZIONI);
+
+  creaHeader(doc, payload, ["Analisi Ricavi e", "Spese"]);
+
+  doc.font('Helvetica-BoldOblique').fontSize(13)
+  .text(`Periodo di riferimento: ${getDate(from)} - ${getDate(to)}`)
+  .moveDown(1)
+  .text(`Operazioni registrate: ${operazioni.length}`)
+  .moveDown(3);
+
+  operazioni.forEach((el, index)=>{
+    if(index-12===0||(index-12)%16===0) pagine = voltaPagina(doc, pagine);
+    doc.font('Helvetica-BoldOblique').fillColor(COLORS.NORMAL)
+    .text(`${index+1})`, {continued:true})
+    .fillColor(el.importo > 0 ? COLORS.GREEN : COLORS.RED)
+    .text(`    ${el.importo>0?'+':''}${formatNumber(el.importo)} €`, {continued: true})
+    .fillColor(COLORS.NORMAL).font('Helvetica-Oblique')
+    .text(`  ${getDate(el.data)} - ${el.descrizione}`)
+    .moveDown(1);
+  })
+
+  const reducer = (previousValue, currentValue) => previousValue + currentValue;
+  const saldo = operazioni.map(el=>el.importo).reduce(reducer).toFixed(0);
+
+  doc.font('Helvetica-BoldOblique').moveDown(1)
+  .text('Saldo complessivo: ', {continued: true})
+  .fillColor(saldo>0 ? COLORS.BLUE : COLORS.RED).text(`    ${saldo>0?'+':''}${formatNumber(saldo)} €`);
+
+
+  // footer link al sito
+  displayFooter(doc);
+
+  // numero pagina
+  displayNumeroPagina(doc, pagine.corrente, pagine.totali);
   
 }
 
@@ -704,8 +831,10 @@ const creaReportGenerico = (doc, payload) =>{
   creaPrimaPagina(doc, payload);
   // crea pagina acquisizioni e chiusure
   creaPaginaImmobiliCambiati(doc, payload);
-  // per ogni immobile attivo crea pagina annuncio e pagina visite
+  // per ogni immobile attivo crea pagina annuncio
   creaPagineImmobiliAttivi(doc, payload);
+  // crea pagina visite
+  creaPaginaVisiteGenerica(doc, payload);
   // crea pagina lavori
   creaPaginaLavori(doc, payload);
   // if details crea pagina operazioni

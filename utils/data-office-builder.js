@@ -28,29 +28,31 @@ const getListaImmobiliAttivi = async (connection) => {
     return listaImmobili;
 }
 
-
-
 const getVisiteEffettuate = async(connection, from, to)=>{
     // get visite con data between from e to
-    const visiteTextQuery = `SELECT * FROM visita WHERE quando BETWEEN '${from}' AND '${to}' ORDER BY quando`;
+    const visiteTextQuery = `SELECT visita.immobile, visita.quando, visita.note, persona.nome, immobile.ref 
+    FROM visita INNER JOIN persona ON visita.persona=persona.id 
+    INNER JOIN immobile ON visita.immobile=immobile.id
+    WHERE quando BETWEEN '${from}' AND '${to}' ORDER BY quando`;
     const visiteQueryRes = await connection.execute(visiteTextQuery); 
-    return !visiteQueryRes[0][0] ? [] : visiteQueryRes[0];
+    if(!visiteQueryRes[0][0]) return [];
+    return visiteQueryRes[0];
 }
 
 const getLavoriConSteps = async(connection, from, to)=>{
     // get all steps con data between from e to
-    const lavoroTextQuery = `SELECT step.lavoro, step.id, lavoro.titolo, step.data, step.descrizione FROM step INNER JOIN lavoro ON step.lavoro=lavoro.id  WHERE data BETWEEN '${from}' AND '${to}' ORDER BY step.lavoro, step.id`;
+    const lavoroTextQuery = `SELECT lavoro.titolo, step.data, step.descrizione FROM step INNER JOIN lavoro ON step.lavoro=lavoro.id  WHERE data BETWEEN '${from}' AND '${to}' ORDER BY step.lavoro, step.id`;
     const lavoroQueryRes = await connection.execute(lavoroTextQuery); 
     if(!lavoroQueryRes[0][0]) return [];
     const listaLavori = lavoroQueryRes[0];
     // hai un array di oggetti, vuoi creare un array di oggetti con un array dentro
     const results = [];
     listaLavori.forEach(element=>{
-        const lavoroObjectIndex = results.findIndex(el=>el.lavoro===element.lavoro);
+        const lavoroObjectIndex = results.findIndex(el=>el.titolo===element.titolo);
         if(lavoroObjectIndex!==-1){
-            results[lavoroObjectIndex].steps.push({id: element.id, titolo: element.titolo, data: element.data});
+            results[lavoroObjectIndex].steps.push({id: element.id, descrizione: element.descrizione, data: element.data});
         }else{
-            results.push({lavoro:element.lavoro, steps:[{id: element.id, titolo: element.titolo, data: element.data}]})
+            results.push({titolo:element.titolo, steps:[{id: element.id, descrizione: element.descrizione, data: element.data}]})
         }
     })
     return results;
@@ -64,6 +66,10 @@ const getOperazioni = async(connection, from, to)=>{
 }
 
 exports.buildDataOffice = async(connection, from, to, details) => {
+
+    const domani = new Date(new Date(to).getTime()+1000*60*60*24);
+    to = `${domani.getFullYear()}-${domani.getMonth()+1}-${domani.getDate()}`;
+
     const dataOffice = {};
     // hai bisogno degli immobili Acquisiti
     dataOffice.acquisizioni = await getImmobiliCambiati(connection, from, to, 'ATTIVO');
@@ -76,6 +82,6 @@ exports.buildDataOffice = async(connection, from, to, details) => {
     // dei lavori con i loro step
     dataOffice.lavori = await getLavoriConSteps(connection, from, to);
     // della contabilità
-    if(details) dataOffice.getOperazioni = await getOperazioni(connection, from, to);
+    if(details) dataOffice.operazioni = await getOperazioni(connection, from, to);
     return dataOffice;
 }

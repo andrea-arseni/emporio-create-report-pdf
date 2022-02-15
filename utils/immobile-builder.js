@@ -14,8 +14,8 @@ const retrieveLogsImmobile = async (connection, idImmobile)=>{
     return !logQueryRes[0][0] ? [] : logQueryRes[0];
 }
 
-const retrieveFilesImmobile = async (connection, idImmobile)=>{
-    const filesTextQuery = `SELECT * FROM file WHERE immobile = ${idImmobile}`;
+const retrieveFilesImmobile = async (connection, immobile)=>{
+    const filesTextQuery = `SELECT * FROM file WHERE immobile = ${immobile.id} OR persona = ${immobile.proprietario}`;
     const fileQueryRes = await connection.execute(filesTextQuery); 
     return !fileQueryRes[0][0] ? [] : fileQueryRes[0];
 }
@@ -34,11 +34,15 @@ const retrieveVisiteImmobile = async (connection, idImmobile, from, to)=>{
 }
 
 exports.buildImmobile = async(connection, idImmobile, from, to) => {
+
+    const domani = new Date(new Date(to).getTime()+1000*60*60*24);
+    to = `${domani.getFullYear()}-${domani.getMonth()+1}-${domani.getDate()}`;
+
     const immobile = await retrieveImmobile(connection, idImmobile);
     immobile.logs = await retrieveLogsImmobile(connection, idImmobile);
     immobile.caratteristiche = await retrieveCaratteristicheImmobile(connection, immobile.caratteristiche);
     immobile.datiZona = await prezzoZona.retrieveDatiZona(immobile);
     immobile.visite = await retrieveVisiteImmobile(connection, idImmobile, from, to);
-    immobile.files = await retrieveFilesImmobile(connection, idImmobile);
+    immobile.files = await retrieveFilesImmobile(connection, immobile);
     return immobile;
 }
