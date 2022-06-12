@@ -1,25 +1,25 @@
 {
-  "name": "emporio-create-report-pdf",
-  "version": "1.0.0",
-  "description": "AWS Lambda per creare un report in pdf",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/andrea-arseni/emporio-create-report-pdf.git"
-  },
-  "author": "Andrea Arseni",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/andrea-arseni/emporio-create-report-pdf/issues"
-  },
-  "homepage": "https://github.com/andrea-arseni/emporio-create-report-pdf#readme",
-  "dependencies": {
-    "axios": "^0.25.0",
-    "image-size": "^1.0.1",
-    "mysql2": "^2.3.3",
-    "pdfkit": "^0.13.0"
-  }
+    "name": "emporio-create-report-pdf",
+    "version": "1.0.0",
+    "description": "AWS Lambda per creare un report in pdf",
+    "main": "index.js",
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/andrea-arseni/emporio-create-report-pdf.git"
+    },
+    "author": "Andrea Arseni",
+    "license": "ISC",
+    "bugs": {
+        "url": "https://github.com/andrea-arseni/emporio-create-report-pdf/issues"
+    },
+    "homepage": "https://github.com/andrea-arseni/emporio-create-report-pdf#readme",
+    "dependencies": {
+        "axios": "^0.25.0",
+        "image-size": "^1.0.1",
+        "mysql2": "^2.3.3",
+        "pdfkit": "^0.13.0"
+    }
 }
